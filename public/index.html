@@ -6,7 +6,7 @@
 h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}.g{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));max-width:1100px}
 .c{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:16px}h2{font-size:17px;margin:0 0 12px}
 .k{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.k b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.k span{color:var(--mut);font-size:13px}
-.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:14px}.cal i{aspect-ratio:1;border-radius:3px;background:var(--ln)}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:14px}.cal i{height:18px;border-radius:3px;background:var(--ln)}
 .up{color:var(--up)}.dn{color:var(--dn)}svg{width:100%;height:80px}table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}td{padding:3px 0;border-top:1px solid var(--ln)}
 </style><h1>FalconTrader Paper</h1><p class="sub" id="lat">Waiting for first signal.</p><div class="g" id="g"></div>
 <script>
@@ -16,7 +16,7 @@ function card(t,a){const w=a.n?Math.round(100*a.wins/a.n):0,cv=a.curve.map(p=>p[
  let cal='';for(let i=41;i>=0;i--){const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10),v=a.days[d];
   cal+=`<i title="${d} ${v==null?'no trades':$(v)}" style="${v==null?'':`background:var(--${v>=0?'up':'dn'});opacity:${.35+Math.min(.65,Math.abs(v)/400)}`}"></i>`}
  return `<div class="c"><h2>${t}</h2><div class="k"><div><b class="${cl(a.net)}">${$(a.net)}</b><span>Net P&amp;L</span></div><div><b>${a.n}</b><span>Trades</span></div><div><b>${w}%</b><span>Win rate</span></div>
- <div><b>${f(a.pf)}</b><span>Profit factor</span></div><div><b>${f(a.avgR)}R</b><span>Avg R</span></div><div><b>${$(-a.dd)}</b><span>Max drawdown</span></div></div>
+ <div><b>${f(a.pf)}</b><span>Profit factor</span></div><div><b>${f(a.avgR)}R</b><span>Avg R</span></div><div><b>${a.dd?'-$'+a.dd.toFixed(0):'$0'}</b><span>Max drawdown</span></div></div>
  <svg viewBox="0 0 300 80" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
  <div class="cal">${cal}</div><table>${Object.entries(a.bySym).map(([s,v])=>`<tr><td>${s}</td><td class="${cl(v)}" align="right">${$(v)}</td></tr>`).join('')}
  ${a.open.map(o=>`<tr><td>Open ${o.sym} ${o.side>0?'buy':'sell'} ×${o.qo}</td><td align="right">${o.entry}</td></tr>`).join('')}</table></div>`}
