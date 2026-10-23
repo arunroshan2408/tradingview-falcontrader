@@ -1,0 +1,27 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FalconTrader Paper</title>
+<style>
+:root{--bg:#f3f5f7;--card:#fff;--ink:#14202b;--mut:#66727e;--up:#17855a;--dn:#c2412d;--ln:#dde3e8;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#10171d;--card:#18222b;--ink:#e8eef2;--mut:#8fa0ad;--up:#3ec88a;--dn:#ee7461;--ln:#2a3844}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,sans-serif;padding:max(16px,env(safe-area-inset-top)) 16px 32px}
+h1{font-size:22px;margin:0 0 4px}.sub{color:var(--mut);margin:0 0 20px}.g{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));max-width:1100px}
+.c{background:var(--card);border:1px solid var(--ln);border-radius:10px;padding:16px}h2{font-size:17px;margin:0 0 12px}
+.k{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.k b{display:block;font-size:20px;font-variant-numeric:tabular-nums}.k span{color:var(--mut);font-size:13px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;margin-top:14px}.cal i{aspect-ratio:1;border-radius:3px;background:var(--ln)}
+.up{color:var(--up)}.dn{color:var(--dn)}svg{width:100%;height:80px}table{width:100%;border-collapse:collapse;font-size:13px;margin-top:10px}td{padding:3px 0;border-top:1px solid var(--ln)}
+</style><h1>FalconTrader Paper</h1><p class="sub" id="lat">Waiting for first signal.</p><div class="g" id="g"></div>
+<script>
+const f=(n,d=2)=>n==null?'–':n.toFixed(d),$=n=>(n<0?'-':'+')+'$'+Math.abs(n).toFixed(0),cl=n=>n>=0?'up':'dn';
+function card(t,a){const w=a.n?Math.round(100*a.wins/a.n):0,cv=a.curve.map(p=>p[1]),mn=Math.min(...cv,5e4),mx=Math.max(...cv,5e4),
+ pts=cv.length>1?cv.map((v,i)=>`${i/(cv.length-1)*300},${76-(v-mn)/(mx-mn||1)*72}`).join(' '):'';
+ let cal='';for(let i=41;i>=0;i--){const d=new Date(Date.now()-i*864e5).toISOString().slice(0,10),v=a.days[d];
+  cal+=`<i title="${d} ${v==null?'no trades':$(v)}" style="${v==null?'':`background:var(--${v>=0?'up':'dn'});opacity:${.35+Math.min(.65,Math.abs(v)/400)}`}"></i>`}
+ return `<div class="c"><h2>${t}</h2><div class="k"><div><b class="${cl(a.net)}">${$(a.net)}</b><span>Net P&amp;L</span></div><div><b>${a.n}</b><span>Trades</span></div><div><b>${w}%</b><span>Win rate</span></div>
+ <div><b>${f(a.pf)}</b><span>Profit factor</span></div><div><b>${f(a.avgR)}R</b><span>Avg R</span></div><div><b>${$(-a.dd)}</b><span>Max drawdown</span></div></div>
+ <svg viewBox="0 0 300 80" preserveAspectRatio="none"><polyline points="${pts}" fill="none" stroke="var(--up)" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>
+ <div class="cal">${cal}</div><table>${Object.entries(a.bySym).map(([s,v])=>`<tr><td>${s}</td><td class="${cl(v)}" align="right">${$(v)}</td></tr>`).join('')}
+ ${a.open.map(o=>`<tr><td>Open ${o.sym} ${o.side>0?'buy':'sell'} ×${o.qo}</td><td align="right">${o.entry}</td></tr>`).join('')}</table></div>`}
+async function go(){try{const d=await(await fetch('api/stats')).json();
+ if(d.lat.n)lat.textContent=`Alert latency on ${d.lat.n} entries: avg ${f(d.lat.avg/1e3,1)}s, max ${f(d.lat.max/1e3,1)}s. Calendar days end at 05:30 IST.`;
+ g.innerHTML=card('Mirror: follows indicator messages',d.MIRROR)+card('Realistic: exits from 1-minute bars',d.REAL)}catch(e){lat.textContent='Server unreachable. Retrying.'}}
+go();setInterval(go,15000);
+</script></html>
