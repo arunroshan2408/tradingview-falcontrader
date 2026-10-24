@@ -1,6 +1,5 @@
 //@version=6
 indicator("FTT Bar Feed", overlay=true)
-// Add on a 1-minute chart. Alert condition: "Any alert() function call". Webhook URL: https://YOUR-APP/hook
+// 1-minute chart, one alert per symbol. Condition: "Any alert() function call". Webhook URL: https://YOUR-APP/hook
 secret = input.string("CHANGE_ME", "Webhook Secret")
-name   = input.string("MNQ1", "Symbol name (MNQ1 or MGC1)")
-alert('{"secret":"' + secret + '","type":"BAR","symbol":"' + name + '","t":' + str.tostring(time) + ',"o":' + str.tostring(open) + ',"h":' + str.tostring(high) + ',"l":' + str.tostring(low) + ',"c":' + str.tostring(close) + '}', alert.freq_once_per_bar_close)
+alert('{"secret":"' + secret + '","type":"BAR","symbol":"' + syminfo.ticker + '","t":' + str.tostring(time) + ',"o":' + str.tostring(open) + ',"h":' + str.tostring(high) + ',"l":' + str.tostring(low) + ',"c":' + str.tostring(close) + ',"tick":' + str.tostring(syminfo.mintick) + ',"pv":' + str.tostring(syminfo.pointvalue) + '}', alert.freq_once_per_bar_close)

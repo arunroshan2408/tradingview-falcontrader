@@ -1,0 +1,68 @@
+<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>FalconTrader Paper</title>
+<style>
+:root{--bg:#0d1217;--p:#141b22;--ln:#232e38;--ink:#e5ecf1;--mut:#7e8e9a;--up:#2fbf86;--dn:#ef6a57;--ac:#4aa3ff;color-scheme:dark}
+@media(prefers-color-scheme:light){:root{--bg:#eef2f5;--p:#fff;--ln:#dbe2e8;--ink:#12202b;--mut:#62717d;--up:#12805a;--dn:#bf3f2d;--ac:#1a6fd4;color-scheme:light}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:14px/1.45 system-ui,sans-serif;padding-top:env(safe-area-inset-top)}
+header{display:flex;flex-wrap:wrap;gap:10px 18px;align-items:center;padding:12px 20px;background:var(--p);border-bottom:1px solid var(--ln);position:sticky;top:0;z-index:5}
+header b{font-size:17px}header em{font-style:normal;color:var(--mut)}.sp{flex:1}
+.tabs button,select,button.b{background:transparent;color:var(--ink);border:1px solid var(--ln);border-radius:6px;padding:6px 12px;font:inherit;cursor:pointer}
+.tabs button.on{background:var(--ac);border-color:var(--ac);color:#fff}.dot{width:8px;height:8px;border-radius:50%;background:var(--up);display:inline-block;margin-right:6px}
+main{padding:16px 20px;max-width:1400px;margin:auto;display:grid;gap:16px}
+.k{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:1px;background:var(--ln);border:1px solid var(--ln);border-radius:8px;overflow:hidden}
+.k div{background:var(--p);padding:12px 14px}.k span{color:var(--mut);font-size:12px;display:block}.k b{font-size:19px;font-variant-numeric:tabular-nums}
+.pn{background:var(--p);border:1px solid var(--ln);border-radius:8px;padding:14px 16px;min-width:0}.pn h3{margin:0 0 10px;font-size:14px;color:var(--mut);font-weight:600}
+.two{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(340px,1fr))}.w{overflow-x:auto;max-height:420px}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums;white-space:nowrap}th{position:sticky;top:0;background:var(--p);color:var(--mut);font-weight:500;text-align:right;padding:6px 10px;border-bottom:1px solid var(--ln)}
+td{text-align:right;padding:6px 10px;border-bottom:1px solid var(--ln)}th:first-child,td:first-child,th:nth-child(2),td:nth-child(2){text-align:left}
+.up{color:var(--up)}.dn{color:var(--dn)}svg{width:100%;height:170px;display:block}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}.cal u{text-decoration:none;color:var(--mut);font-size:11px;text-align:center}
+.cal i{font-style:normal;min-height:46px;border-radius:5px;background:var(--bg);padding:3px 6px;font-size:11px;color:var(--mut);display:flex;flex-direction:column;justify-content:space-between}.cal i b{font-size:12px;color:var(--ink);font-weight:600}
+dialog{background:var(--p);color:var(--ink);border:1px solid var(--ln);border-radius:10px;width:min(380px,92vw)}dialog label{display:block;margin:8px 0 2px;color:var(--mut);font-size:12px}dialog input,dialog select{width:100%;background:var(--bg);color:var(--ink);border:1px solid var(--ln);border-radius:6px;padding:7px}
+.warn{color:#e0a83a}
+</style>
+<header><b>FalconTrader</b><em>Paper</em><div class="tabs"><button id="tM" class="on">Mirror</button><button id="tR">Realistic</button></div>
+<select id="sy"><option value="">All symbols</option></select><select id="pd"><option value="1">Today</option><option value="7">7 days</option><option value="30" selected>30 days</option><option value="all">All time</option></select>
+<span class="sp"></span><span><i class="dot"></i><em id="st">connecting</em></span><button class="b" id="se">Settings</button></header>
+<main><div class="k" id="k"></div>
+<div class="pn"><h3>Open positions</h3><div class="w" id="op"></div></div>
+<div class="two"><div class="pn"><h3>Equity curve (period, net of costs)</h3><div id="eq"></div></div><div class="pn"><h3>Daily P&amp;L (day ends 05:30 IST)</h3><div class="cal" id="cal"></div></div></div>
+<div class="pn"><h3>Trade history (IST)</h3><div class="w" id="hi"></div></div></main>
+<dialog id="dl"><form method="dialog"><h3 style="margin:0 0 6px">Settings</h3><label>Starting capital (USD)</label><input id="fc" type="number"><label>Symbol</label><select id="fs"></select>
+<label>Contracts per trade</label><input id="fq" type="number"><label>Commission per contract per side</label><input id="fm" type="number" step="any"><label>Slippage (ticks)</label><input id="fl" type="number" step="any">
+<label>Tick size</label><input id="ft" type="number" step="any"><label>$ per 1.0 price move per contract</label><input id="fp" type="number" step="any"><label>Secret</label><input id="fk" type="password">
+<p style="text-align:right"><button class="b" value="x">Close</button> <button class="b" id="sv" type="button">Save</button></p></form></dialog>
+<script>
+const $=i=>document.getElementById(i);let D,A='MIRROR';
+const sg=(n,s)=>n<0?'−':s&&n>0?'+':'',m=(n,s)=>n==null||isNaN(n)?'–':sg(n,s)+'$'+Math.abs(n).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2}),c=n=>n>0?'up':n<0?'dn':'';
+const ist=t=>new Date(t).toLocaleString('en-GB',{timeZone:'Asia/Kolkata',day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit',hour12:false}),
+ dur=ms=>ms<36e5?Math.round(ms/6e4)+'m':(ms/36e5).toFixed(1)+'h';
+function render(){const I=Object.fromEntries(D.inst.map(i=>[i.sym,i])),pv=s=>(I[s]||{pv:1}).pv,T=D.trades.filter(t=>t.acct==A),y=$('sy').value,pd=$('pd').value,d=new Date(),
+ sod=Date.UTC(d.getUTCFullYear(),d.getUTCMonth(),d.getUTCDate()),cut=pd=='all'?0:sod-(+pd-1)*864e5,net=t=>t.gross-t.comm,
+ fl=t=>{const l=D.last[t.sym];return l?(l.p-t.entry)*t.side*t.qo*pv(t.sym):0},O=T.filter(t=>t.qo>0),OF=O.filter(t=>!y||t.sym==y),
+ C=T.filter(t=>!t.qo&&(!y||t.sym==y)&&t.t1>=cut).sort((a,b)=>a.t1-b.t1),bal=D.cap+T.filter(t=>!t.qo).reduce((s,t)=>s+net(t),0),
+ floatAll=O.reduce((s,t)=>s+net(t)+fl(t),0),F=OF.reduce((s,t)=>s+fl(t),0),N=C.reduce((s,t)=>s+net(t),0),W=C.filter(t=>net(t)>0),
+ gp=W.reduce((s,t)=>s+net(t),0),gl=C.filter(t=>net(t)<=0).reduce((s,t)=>s-net(t),0),R=C.map(t=>net(t)/(Math.abs(t.entry-t.sl0)*pv(t.sym)*t.q||1)),
+ todayN=T.filter(t=>!t.qo&&t.t1>=sod&&(!y||t.sym==y)).reduce((s,t)=>s+net(t),0);
+ let e=0,pk=0,dd=0;const cv=C.map(t=>(e+=net(t),pk=Math.max(pk,e),dd=Math.max(dd,pk-e),e)),L=T.filter(t=>t.lat!=null&&t.lat>=0).map(t=>t.lat);
+ const K=[['Balance',m(bal)],['Equity',m(bal+floatAll)],['Floating P&L',`<span class="${c(F)}">${m(F,1)}</span>`],['Today',`<span class="${c(todayN)}">${m(todayN,1)}</span>`],
+ ['Net P&L (period)',`<span class="${c(N)}">${m(N,1)}</span>`],['Trades',C.length],['Win rate',C.length?Math.round(100*W.length/C.length)+'%':'–'],['Profit factor',gl?(gp/gl).toFixed(2):gp?'∞':'–'],
+ ['Avg R',R.length?(R.reduce((s,x)=>s+x,0)/R.length).toFixed(2)+'R':'–'],['Max drawdown',dd?m(-dd):'$0.00'],['Alert latency',L.length?(L.reduce((s,x)=>s+x,0)/L.length/1e3).toFixed(1)+'s avg':'–']];
+ $('k').innerHTML=K.map(x=>`<div><span>${x[0]}</span><b>${x[1]}</b></div>`).join('');
+ $('op').innerHTML=OF.length?`<table><tr><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Last</th><th>SL</th><th>TP1</th><th>TP2</th><th>Realised</th><th>Floating</th><th>Opened</th></tr>`+OF.map(t=>{const l=D.last[t.sym],f=fl(t);return `<tr><td>${t.sym}${I[t.sym]&&!I[t.sym].ok?' <span class="warn" title="Needs bar feed or Settings">⚠</span>':''}</td><td class="${t.side>0?'up':'dn'}">${t.side>0?'BUY':'SELL'}</td><td>${t.qo}/${t.q}</td><td>${t.entry}</td><td>${l?l.p:'–'}</td><td>${t.sl}</td><td>${t.tp1}</td><td>${t.tp2}</td><td class="${c(net(t))}">${m(net(t),1)}</td><td class="${c(f)}">${l?m(f,1):'–'}</td><td>${ist(t.t0)}</td></tr>`}).join('')+'</table>':'<em style="color:var(--mut)">No open positions.</em>';
+ const lo=Math.min(0,...cv),hi=Math.max(0,...cv),Y=v=>150-(v-lo)/(hi-lo||1)*130;
+ $('eq').innerHTML=cv.length>1?`<svg viewBox="0 0 400 170" preserveAspectRatio="none"><line x1="0" x2="400" y1="${Y(0)}" y2="${Y(0)}" stroke="var(--ln)"/><polyline fill="none" stroke="${e>=0?'var(--up)':'var(--dn)'}" stroke-width="2" vector-effect="non-scaling-stroke" points="${cv.map((v,i)=>`${i/(cv.length-1)*400},${Y(v)}`).join(' ')}"/></svg><em style="color:var(--mut)">${m(lo)} to ${m(hi)}</em>`:'<em style="color:var(--mut)">Needs two closed trades in this period.</em>';
+ const days={};T.filter(t=>!t.qo&&(!y||t.sym==y)).forEach(t=>days[t.day]=(days[t.day]||0)+net(t));let h='';
+ for(const w of['Mon','Tue','Wed','Thu','Fri','Sat','Sun'])h+=`<u>${w}</u>`;
+ const end=new Date(sod),pad=(7-((end.getUTCDay()+6)%7+1))%7;for(let i=41+pad;i>=0;i--){const dt=new Date(sod+(i-pad)*-864e5),k=dt.toISOString().slice(0,10),v=days[k];
+  h+=`<i style="${v==null?'':`background:color-mix(in srgb,var(--${v>=0?'up':'dn'}) ${Math.min(55,15+Math.abs(v)/8)}%,var(--bg))`}">${dt.getUTCDate()}<b class="${c(v)}">${v==null?'':m(v,1)}</b></i>`}
+ $('cal').innerHTML=h;
+ $('hi').innerHTML=C.length?`<table><tr><th>Closed</th><th>Symbol</th><th>Side</th><th>Qty</th><th>Entry</th><th>Exit avg</th><th>Held</th><th>R</th><th>Gross</th><th>Costs</th><th>Net</th></tr>`+[...C].reverse().slice(0,300).map(t=>`<tr><td>${ist(t.t1)}</td><td>${t.sym}</td><td class="${t.side>0?'up':'dn'}">${t.side>0?'BUY':'SELL'}</td><td>${t.q}</td><td>${t.entry}</td><td>${t.xn?(t.xs/t.xn).toFixed(2):'–'}</td><td>${dur(t.t1-t.t0)}</td><td class="${c(net(t))}">${(net(t)/(Math.abs(t.entry-t.sl0)*pv(t.sym)*t.q||1)).toFixed(2)}</td><td class="${c(t.gross)}">${m(t.gross,1)}</td><td>${m(-t.comm)}</td><td class="${c(net(t))}"><b>${m(net(t),1)}</b></td></tr>`).join('')+'</table>':'<em style="color:var(--mut)">No closed trades in this period.</em>'}
+async function go(){try{D=await(await fetch('api/data')).json();const s=$('sy'),v=s.value,o=['<option value="">All symbols</option>',...D.inst.map(i=>`<option>${i.sym}</option>`)].join('');if(s.dataset.o!=o){s.innerHTML=o;s.dataset.o=o;s.value=v}
+ $('st').textContent='live '+new Date().toLocaleTimeString('en-GB',{timeZone:'Asia/Kolkata'})+' IST';render()}catch(e){$('st').textContent='server unreachable'}}
+$('tM').onclick=()=>{A='MIRROR';$('tM').className='on';$('tR').className='';render()};$('tR').onclick=()=>{A='REAL';$('tR').className='on';$('tM').className='';render()};$('sy').onchange=$('pd').onchange=render;
+const fi=()=>{const i=D.inst.find(x=>x.sym==$('fs').value)||{};$('fq').value=i.qty;$('fm').value=i.comm;$('fl').value=i.slip;$('ft').value=i.tick;$('fp').value=i.pv};
+$('se').onclick=()=>{$('fc').value=D.cap;$('fs').innerHTML=D.inst.map(i=>`<option>${i.sym}</option>`).join('');fi();$('dl').showModal()};$('fs').onchange=fi;
+$('sv').onclick=async()=>{const r=await fetch('api/set',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({secret:$('fk').value,cap:$('fc').value,sym:$('fs').value,qty:$('fq').value,comm:$('fm').value,slip:$('fl').value,tick:$('ft').value,pv:$('fp').value})});
+ if(r.ok){$('dl').close();go()}else alert('Wrong secret')};
+go();setInterval(go,5000);
+</script></html>
