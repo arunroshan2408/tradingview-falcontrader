@@ -18,7 +18,7 @@ function openT(a,m,y){const c=ins(y),side=m.direction=='BUY'?1:-1,stp=/STOP/.tes
   db.prepare('insert into t(acct,sym,side,t0,entry,sl,sl0,tp1,tp2,q,qo,comm,lat) values(?,?,?,?,?,?,?,?,?,?,?,?,?)').run(a,y,side,Date.now(),e,+m.sl,+m.sl,+m.tp1,+m.tp2,c.qty,c.qty,c.qty*c.comm,lat)}
 const app=express();
 app.post('/hook',express.text({type:'*/*'}),(q,r)=>{let m;try{m=JSON.parse(q.body)}catch{return r.sendStatus(400)}
-  if(m.secret!==SECRET)return r.sendStatus(403);const y=norm(m.symbol),T=m.type;if(!y)return r.sendStatus(422);
+  if(m.secret!==SECRET){console.log('403 wrong secret, symbol',m.symbol);return r.sendStatus(403)}const y=norm(m.symbol),T=m.type;if(!y)return r.sendStatus(422);if(T!='BAR')console.log('hook',T,y,m.direction||'');
   if(T=='BAR'){last[y]={p:+m.c,t:+m.t};const c=ins(y);if(!c.ok&&+m.pv)db.prepare('update inst set tick=?,pv=?,ok=1 where sym=?').run(+m.tick||.01,+m.pv,y);
     const z=open('REAL',y);
     if(z&&+m.t>=Math.floor(z.t0/6e4)*6e4+6e4){ // skip the entry minute: intrabar order unknown
@@ -29,10 +29,10 @@ app.post('/hook',express.text({type:'*/*'}),(q,r)=>{let m;try{m=JSON.parse(q.bod
   else if(T=='PENDING')pend[y+m.direction]=m.order_type;
   else if(T=='PENDING_CANCEL')delete pend[y+m.direction];
   else if(T=='ENTRY')['MIRROR','REAL'].forEach(a=>{const o=open(a,y);if(o)fill(o,o.qo,+m.entry,0);openT(a,m,y)});
-  else{const o=open('MIRROR',y);
+  else if(['TP1','TP2','SL','BE_EXIT'].includes(T)){const o=open('MIRROR',y); // ZONE and unknown types must never close trades
     if(T=='TP1'){BE=m.be_active=='true';if(o){fill(o,q1(o),+m.tp1,0);db.prepare('update t set tp1d=1,sl=? where id=?').run(BE?o.entry:o.sl,o.id)}}
     else{if(o)T=='TP2'?fill(o,o.qo,+m.tp2,0):T=='SL'?fill(o,o.qo,+m.sl,1):fill(o,o.qo,o.entry,1);
-      const z=open('REAL',y);if(z)T=='TP2'?fill(z,z.qo,+m.tp2,0):T=='SL'?fill(z,z.qo,+m.sl,1):fill(z,z.qo,z.entry,1)}}
+      let z=open('REAL',y);if(z){if(T=='TP2'&&!z.tp1d){fill(z,q1(z),z.tp1,0);z=open('REAL',y)}if(z)T=='TP2'?fill(z,z.qo,+m.tp2,0):T=='SL'?fill(z,z.qo,+m.sl,1):fill(z,z.qo,z.entry,1)}}}
   r.sendStatus(200)});
 app.get('/api/data',(q,r)=>{const c=db.prepare("select v from cfg where k='cap'").get();
   r.json({trades:db.prepare('select * from t order by id desc limit 3000').all(),inst:db.prepare('select * from inst order by sym').all(),cap:c?+c.v:50000,last})});
