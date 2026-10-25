@@ -59,3 +59,12 @@ Open `http://localhost:3000`.
 - `POST /api/close` — close a paper position at the latest received quote.
 - `POST /api/settings` — update capital/risk and selected symbol contract configuration; requires `secret`.
 - `POST /api/reset` — destructive reset; requires `secret` and `confirm: "YES"`.
+
+
+## Two-indicator source-aware webhooks (updated)
+
+This package includes `FTT_Sniper_V5.10.pine` and `FTT_ZCT_Pending_Zones_V8.4.1.pine`. Each webhook payload includes a `strategy_name` (`SNIPER` or `ZCT_PENDING_ZONES`), and the paper server stores it in the trade `source` field. Entry/exit lifecycle events are matched to that source so one indicator's exit should not close the other indicator's trade for the same symbol. The History page now supports symbol text search and indicator/source filtering, and CSV export uses the current filters.
+
+Configure the same private webhook secret in the app environment (`FTT_SECRET`) and each indicator's Webhook Secret Key. In TradingView, create alerts using the indicator's `alert()` function / “Any alert() function call” and point the webhook URL to `/hook`. Do not reuse a public/shared secret.
+
+**Intrabar timing note:** the Sniper script's alert frequency was changed from bar-close-only to once-per-bar so realtime touch/exit events can be sent without waiting for the candle to close. This may produce intrabar signals that differ from historical confirmed-bar results; test on paper first. Actual delivery latency still depends on TradingView alert execution and webhook/network availability. This is a paper simulator, not a broker execution engine. Existing history rows created before the source tag was added remain labelled `WEBHOOK` because their original indicator identity was not stored.

@@ -6,7 +6,7 @@ const path = require('path');
 
 const app = express();
 const PORT = Number(process.env.PORT || 3000);
-const SECRET = process.env.FTT_SECRET || 'FTT2025';
+const SECRET = process.env.FTT_SECRET || 'CHANGE_ME_SET_A_PRIVATE_SECRET';
 const DB_PATH = process.env.DB_PATH || path.join(__dirname, 'paper.db');
 const db = new Db(DB_PATH);
 db.pragma('journal_mode = WAL');
@@ -40,7 +40,7 @@ for (const c of [
 ]) addColumn('inst', c);
 
 const DEFAULTS = {
-  cap: 50000, leverage: 50, riskPct: 1, accountCurrency: 'USD',
+  cap: 100000, leverage: 50, riskPct: 1, accountCurrency: 'USD',
   defaultRR: 2, autoRisk: 1, allowOvernight: 1
 };
 for (const [k, v] of Object.entries(DEFAULTS)) {
@@ -82,7 +82,7 @@ const last = Object.create(null);
 const pending = Object.create(null);
 const config = () => Object.fromEntries(db.prepare('SELECT k,v FROM cfg').all().map(x => [x.k, Number.isFinite(Number(x.v)) ? Number(x.v) : x.v]));
 const putConfig = (k, v) => db.prepare('INSERT OR REPLACE INTO cfg(k,v) VALUES(?,?)').run(k, String(v));
-const openTrade = (acct, sym) => db.prepare('SELECT * FROM t WHERE acct=? AND sym=? AND qo>0 ORDER BY id DESC LIMIT 1').get(acct, sym);
+const openTrade = (acct, sym, source = null) => source ? db.prepare('SELECT * FROM t WHERE acct=? AND sym=? AND qo>0 AND source=? ORDER BY id DESC LIMIT 1').get(acct, sym, source) : db.prepare('SELECT * FROM t WHERE acct=? AND sym=? AND qo>0 ORDER BY id DESC LIMIT 1').get(acct, sym);
 const roundDown = (v, step) => Math.floor((v + 1e-10) / step) * step;
 const roundLot = (v, i) => Math.max(0, Number(roundDown(v, Number(i.lot_step) || 0.01).toFixed(8)));
 function priceValue(i) { return Number(i.pv) > 0 ? Number(i.pv) : 1; }
@@ -209,6 +209,7 @@ app.post('/hook', (req, res) => {
   try { m = typeof req.body === 'string' ? JSON.parse(req.body) : req.body; } catch { return res.status(400).json({ error: 'invalid_json' }); }
   if (!m || m.secret !== SECRET) { console.warn('Rejected webhook: invalid secret'); return res.status(403).json({ error: 'invalid_secret' }); }
   const sym = normalizeSymbol(m.symbol), type = String(m.type || '').toUpperCase();
+  const source = String(m.strategy_name || m.indicator || m.source || 'WEBHOOK').trim().toUpperCase().replace(/[^A-Z0-9_-]/g, '_').slice(0,48) || 'WEBHOOK';
   if (!sym || !type) return res.status(422).json({ error: 'missing_symbol_or_type' });
   try {
     const i = ensureInst(sym);
@@ -234,8 +235,9 @@ app.post('/hook', (req, res) => {
           catch (e) { console.warn('Pending order skipped:', e.message); db.prepare('DELETE FROM pending_orders WHERE id=?').run(po.id); }
         }
       }
-      const z = openTrade('REAL', sym);
-      if (z && last[sym].h > 0 && last[sym].l > 0 && Number(m.t) >= Math.floor(Number(z.t0) / 60000) * 60000 + 60000) {
+      const z = openTrade('REAL', sym); // quote feed still auto-manages manual/legacy positions only
+      const managedByIndicator = z && !['MANUAL','PENDING','WEBHOOK'].includes(String(z.source || '').toUpperCase());
+      if (z && !managedByIndicator && last[sym].h > 0 && last[sym].l > 0 && Number(m.t) >= Math.floor(Number(z.t0) / 60000) * 60000 + 60000) {
         const hit = (level, target) => (Number(z.side) > 0) === target ? Number(m.h) >= level : Number(m.l) <= level;
         // Conservative OHLC rule: if both stop and target are inside a bar, assume stop first.
         if (hit(Number(z.sl), false)) closeTrade(z, Number(z.sl), Number(z.qo), true);
@@ -249,33 +251,33 @@ app.post('/hook', (req, res) => {
       }
       return res.json({ ok: true, type: 'BAR', symbol: sym });
     }
-    if (type === 'PENDING') pending[sym + m.direction] = m.order_type;
-    else if (type === 'PENDING_CANCEL') delete pending[sym + m.direction];
+    if (type === 'PENDING') pending[sym + source + m.direction] = m.order_type;
+    else if (type === 'PENDING_CANCEL') delete pending[sym + source + m.direction];
     else if (type === 'ENTRY') {
       if (!['BUY','SELL'].includes(String(m.direction).toUpperCase())) return res.status(422).json({ error: 'invalid_direction' });
       const side = String(m.direction).toUpperCase();
       for (const acct of ['MIRROR','REAL']) {
-        const prior = openTrade(acct, sym);
+        const prior = openTrade(acct, sym, source);
         if (prior) closeTrade(prior, Number(m.entry) || Number(last[sym]?.p), Number(prior.qo), false);
         const i2 = ensureInst(sym);
         const sizing = sizeForRisk(Number(m.entry), Number(m.sl), i2, config());
         if (!sizing.qty) { console.warn(`Skipped ${type} ${sym}: ${sizing.reason}`); continue; }
-        const v = validateTrade({ sym, side, entry: Number(m.entry), sl: Number(m.sl), tp: Number(m.tp2 || m.tp1), tp1: Number(m.tp1 || m.tp2), tp2: Number(m.tp2 || m.tp1), qty: sizing.qty, acct, source: 'WEBHOOK' });
-        const stp = /STOP/.test(pending[sym + side] || '');
+        const v = validateTrade({ sym, side, entry: Number(m.entry), sl: Number(m.sl), tp: Number(m.tp2 || m.tp1), tp1: Number(m.tp1 || m.tp2), tp2: Number(m.tp2 || m.tp1), qty: sizing.qty, acct, source });
+        const stp = /STOP/.test(pending[sym + source + side] || '');
         if (stp) v.entry += v.side * Number(i2.slip || 0) * Number(i2.tick || 0);
         insertTrade(v);
       }
-      delete pending[sym + side];
+      delete pending[sym + source + side];
     } else if (['TP1','TP2','SL','BE_EXIT'].includes(type)) {
       for (const acct of ['MIRROR','REAL']) {
-        let t = openTrade(acct, sym);
+        let t = openTrade(acct, sym, source);
         if (!t) continue;
         if (type === 'TP1') {
           const half = roundLot(Number(t.qo) / 2, i);
           const n = half >= Number(i.lot_min) && half < Number(t.qo) ? half : Number(t.qo);
-          exitFill(t, n, Number(m.tp1), false);
+          exitFill(t, n, Number(m.tp1 ?? m.level ?? t.tp1), false);
           db.prepare('UPDATE t SET tp1d=1,sl=? WHERE id=?').run(m.be_active === 'true' ? t.entry : t.sl, t.id);
-        } else if (type === 'TP2') closeTrade(t, Number(m.tp2), Number(t.qo), false);
+        } else if (type === 'TP2') closeTrade(t, Number(m.tp2 ?? m.level ?? t.tp2), Number(t.qo), false);
         else if (type === 'SL') closeTrade(t, Number(m.sl), Number(t.qo), true);
         else closeTrade(t, Number(t.entry), Number(t.qo), true);
       }
